@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rainbow Pop!</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .bubble {
+            position: absolute;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: transform 0.5s ease, opacity 0.5s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            animation: float 3s infinite alternate ease-in-out;
+        }
+        .bubble:hover {
+            transform: scale(2);
+        }
+        .bubble:active {
+            transform: scale(1.0);
+        }
+        @keyframes float {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-10px); }
+        }
+        .pop-effect {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+            border-radius: 50%;
+            animation: pop 0.4s forwards;
+        }
+        @keyframes pop {
+            0% { transform: scale(0); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+            display: none;
+        }
+        #gameOverScreen h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        #restartBtn {
+            padding: 10px 20px;
+            background: #ff4081;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-purple-100 to-blue-100 flex flex-col items-center justify-center p-4 overflow-hidden">
+    <header class="text-center mb-8">
+        <h1 class="text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-600 to-pink-600 mb-2">Rainbow Pop!</h1>
+        <div class="flex justify-center gap-8">
+            <div class="text-xl font-semibold text-purple-700">Score: <span id="score" class="text-pink-600">0</span></div>
+            <div class="text-xl font-semibold text-purple-700">Time: <span id="time" class="text-pink-600">30</span>s</div>
+        </div>
+    </header>
+
+    <main id="gameArea" class="relative w-full h-96 bg-white/30 rounded-2xl shadow-lg backdrop-blur-sm overflow-hidden">
+        <!-- Bubbles will appear here -->
+        <div id="gameOverScreen">
+            <h2>Game Over!</h2>
+            <p id="finalScore">You popped 0 bubbles!</p>
+            <button id="restartBtn">Play Again</button>
+        </div>
+    </main>
+
+    <div class="text-center mt-8">
+        <button id="startBtn" class="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-full hover:from-purple-600 hover:to-pink-600 transition-all shadow-lg hover:shadow-xl">
+            Start Popping!
+        </button>
+    </div>
+
+    <footer class="mt-8 text-center text-purple-700/80">
+        <p>Pop the colorful bubbles before they disappear!</p>
+    </footer>
+
+    <script>
+        // Game configuration
+        const config = {
+            gameDuration: 30,
+            bubbleSizes: [40, 60, 80],
+            colors: [
+                '#FF5252', '#FF4081', '#E040FB', '#7C4DFF', 
+                '#536DFE', '#448AFF', '#40C4FF', '#18FFFF', 
+                '#64FFDA', '#69F0AE', '#B2FF59', '#EEFF41', 
+                '#FFFF00', '#FFD740', '#FFAB40', '#FF6E40'
+            ],
+            spawnRate: 800, // milliseconds
+            bubbleLifetime: { min: 1500, max: 3000 }
+        };
+
+        // Game state
+        let score = 0;
+        let timeLeft = config.gameDuration;
+        let gameActive = false;
+        let timer;
+        let spawnTimer;
+        let bubbles = [];
+
+        // DOM elements
+        const gameArea = document.getElementById('gameArea');
+        const scoreDisplay = document.getElementById('score');
+        const timeDisplay = document.getElementById('time');
+        const startBtn = document.getElementById('startBtn');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScore = document.getElementById('finalScore');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Start the game
+        function startGame() {
+            if (gameActive) return;
+            
+            gameActive = true;
+            score = 0;
+            timeLeft = config.gameDuration;
+            scoreDisplay.textContent = score;
+            timeDisplay.textContent = timeLeft;
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-55');
+            
+            // Hide game over screen
+            gameOverScreen.style.display = 'none';
+            
+            // Clear existing bubbles
+            gameArea.innerHTML = '<div id="gameOverScreen"><h2>Game Over!</h2><p id="finalScore">You popped 0 bubbles!</p><button id="restartBtn">Play Again</button></div>';
+            bubbles = [];
+            
+            // Start timer
+            timer = setInterval(() => {
+                timeLeft--;
+                timeDisplay.textContent = timeLeft;
+                
+                if (timeLeft <= 0) {
+                    endGame();
+                }
+            }, 1000);
+            
+            // Start spawning bubbles
+            spawnBubble();
+            spawnTimer = setInterval(spawnBubble, config.spawnRate);
+        }
+
+        // Create a new bubble
+        function spawnBubble() {
+            if (!gameActive) return;
+            
+            const size = config.bubbleSizes[Math.floor(Math.random() * config.bubbleSizes.length)];
+            const color = config.colors[Math.floor(Math.random() * config.colors.length)];
+            
+            const bubble = document.createElement('div');
+            bubble.className = 'bubble';
+            bubble.style.width = `${size}px`;
+            bubble.style.height = `${size}px`;
+            bubble.style.backgroundColor = color;
+            
+            // Random position within game area
+            const maxX = gameArea.clientWidth - size;
+            const maxY = gameArea.clientHeight - size;
+            const x = Math.floor(Math.random() * maxX);
+            const y = Math.floor(Math.random() * maxY);
+            
+            bubble.style.left = `${x}px`;
+            bubble.style.top = `${y}px`;
+            
+            // Add click handler
+            bubble.addEventListener('click', popBubble);
+            
+            // Add to DOM and tracking array
+            gameArea.appendChild(bubble);
+            bubbles.push({
+                element: bubble,
+                timer: setTimeout(() => removeBubble(bubble), randomBetween(config.bubbleLifetime.min, config.bubbleLifetime.max))
+            });
+        }
+
+        // Pop a bubble
+        function popBubble(e) {
+            if (!gameActive) return;
+            
+            const bubble = e.target;
+            score++;
+            scoreDisplay.textContent = score;
+            
+            // Create pop effect
+            const pop = document.createElement('div');
+            pop.className = 'pop-effect';
+            bubble.appendChild(pop);
+            
+            // Remove after animation
+            setTimeout(() => {
+                removeBubble(bubble);
+            }, 450);
+        }
+
+        // Remove a bubble
+        function removeBubble(bubble) {
+            if (!bubble.parentNode) return;
+            
+            // Clear timeout if exists
+            const bubbleObj = bubbles.find(b => b.element === bubble);
+            if (bubbleObj) {
+                clearTimeout(bubbleObj.timer);
+                bubbles = bubbles.filter(b => b !== bubbleObj);
+            }
+            
+            bubble.remove();
+        }
+
+        // End the game
+        function endGame() {
+            gameActive = false;
+            clearInterval(timer);
+            clearInterval(spawnTimer);
+            
+            // Clear all bubbles
+            bubbles.forEach(bubble => {
+                clearTimeout(bubble.timer);
+                bubble.element.remove();
+            });
+            bubbles = [];
+            
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-55');
+            
+            // Show game over screen
+            finalScore.textContent = `You popped ${score} bubbles!`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        // Helper function
+        function randomBetween(min, max) {
+            return Math.floor(Math.random() * (max - min + 1)) + min;
+        }
+
+        // Event listeners
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+    </script>
+</body>
+</html>
